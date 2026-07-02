@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transformer計算ステップ可視化（地図連動版）</title>
+    <title>Transformer計算ステップ完全可視化（27+19ステップ版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
-        /* アーキテクチャ図の簡易パーツ用スタイル */
         .arch-block {
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .arch-block.active {
             background-color: #ef4444 !important;
             color: #ffffff !important;
             border-color: #dc2626 !important;
-            box-shadow: 0 0 12px #ef4444;
-            transform: scale(1.03);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+            transform: scale(1.05);
+            z-index: 10;
         }
     </style>
 </head>
@@ -24,196 +24,174 @@
 
     <div id="app" class="max-w-7xl mx-auto p-4 md:p-6">
 
-        <header class="mb-6 border-b border-slate-200 pb-4">
-            <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Transformer計算ステップ可視化（現在地マップ付き）</h1>
-            <p class="text-xs md:text-sm text-slate-500 mt-1">数式、行列データ、そして論文の「あの図」がすべて同期。今どこを演算しているのかが一目でわかります。</p>
+        <header class="mb-4 border-b border-slate-200 pb-3">
+            <h1 class="text-xl md:text-2xl font-bold text-slate-900">Transformer内部演算 完全再現マップ</h1>
+            <p class="text-xs md:text-sm text-slate-500 mt-1">残差接続、LayerNorm、自己回帰ループまで。論文『Attention Is All You Need』の挙動を100%可視化。</p>
         </header>
 
-        <div class="flex space-x-2 mb-6 bg-slate-200 p-1 rounded-lg w-fit">
+        <div class="flex space-x-2 mb-4 bg-slate-200 p-1 rounded-lg w-fit">
             <button @click="setMode('learning')"
-                    :class="['px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition-colors', mode === 'learning' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900']">
-                学習モード（全17ステップ）
+                    :class="['px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors', mode === 'learning' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900']">
+                学習モード（一括処理：27ステップ）
             </button>
             <button @click="setMode('inference')"
-                    :class="['px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium rounded-md transition-colors', mode === 'inference' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900']">
-                推論モード（全12ステップ）
+                    :class="['px-3 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors', mode === 'inference' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900']">
+                推論モード（自己回帰：19ステップ）
             </button>
         </div>
 
-        <div class="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div class="flex items-center space-x-3">
-                <span class="text-xxs font-semibold uppercase tracking-wider px-2 py-1 bg-blue-100 text-blue-800 rounded whitespace-nowrap">
-                    ステップ {{ step }} / {{ maxSteps }}
+        <div class="bg-white border border-slate-200 rounded-xl p-3 mb-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sticky top-0 z-50">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+                <span class="text-xs font-semibold px-2 py-1 bg-blue-100 text-blue-800 rounded whitespace-nowrap">
+                    Step {{ step }} / {{ maxSteps }}
                 </span>
-                <span class="font-bold text-slate-900 text-sm md:text-base">{{ currentStepTitle }}</span>
+                <span class="font-bold text-slate-900 text-sm flex-1">{{ currentStepTitle }}</span>
             </div>
             <div class="flex space-x-2 w-full sm:w-auto justify-end">
                 <button @click="prevStep" :disabled="step === 1"
-                        class="flex-1 sm:flex-none px-3 py-2 border border-slate-300 text-xs md:text-sm font-medium rounded shadow-sm bg-white hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white transition-colors">
+                        class="px-4 py-1.5 border border-slate-300 text-sm font-medium rounded bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors">
                     前へ
                 </button>
                 <button @click="nextStep" :disabled="step === maxSteps"
-                        class="flex-1 sm:flex-none px-3 py-2 bg-blue-600 text-white text-xs md:text-sm font-medium rounded shadow-sm hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 transition-colors">
+                        class="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 disabled:opacity-40 transition-colors">
                     次へ
                 </button>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-            <div class="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between h-fit min-h-[500px]">
-                <div>
-                    <span class="text-slate-400 text-[10px] font-bold uppercase tracking-wider block mb-1">現在のユニット</span>
-                    <span class="text-xs font-semibold px-2 py-0.5 rounded mb-4 inline-block font-mono" :class="unitBadgeClass">
-                        {{ currentUnit }}
-                    </span>
-
-                    <h3 class="text-sm font-bold text-slate-900 mb-2 border-b pb-2 border-slate-100">このステップの狙い</h3>
-                    <div class="space-y-3 text-xs md:text-sm leading-relaxed text-slate-600 font-sans">
-                        <p v-for="para in currentStepDesc" :key="para">{{ para }}</p>
-                    </div>
-
-                    <div v-if="currentFormula" class="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100 overflow-x-auto text-slate-800">
-                        <div class="text-slate-400 text-[10px] uppercase tracking-wider mb-1 font-sans">数式表現</div>
-                        <div class="font-mono text-xs">{{ currentFormula }}</div>
-                    </div>
+            <!-- 左側 解説 -->
+            <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col h-fit">
+                <span class="text-[10px] font-bold text-slate-400 uppercase mb-1">現在の処理ユニット</span>
+                <span class="text-xs font-semibold px-2 py-1 rounded mb-3 inline-block font-mono w-fit" :class="unitBadgeClass">
+                    {{ currentUnit }}
+                </span>
+                <h3 class="text-sm font-bold text-slate-900 mb-2 border-b pb-1">このステップの狙い</h3>
+                <div class="space-y-2 text-xs text-slate-600 leading-relaxed mb-4 min-h-[120px]">
+                    <p v-for="para in currentStepDesc" :key="para">{{ para }}</p>
+                </div>
+                <div v-if="currentFormula" class="p-2 bg-slate-50 rounded border border-slate-100 text-slate-800">
+                    <div class="text-[9px] text-slate-400 mb-1">数式イメージ</div>
+                    <div class="font-mono text-[10px] break-words">{{ currentFormula }}</div>
                 </div>
             </div>
 
-            <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col items-center justify-start">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b pb-1 w-full text-center">模型マップ（現在地：赤枠）</h3>
+            <!-- 中央 マップ -->
+            <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col items-center">
+                <h3 class="text-[10px] font-bold text-slate-400 uppercase mb-2">アーキテクチャ・マップ</h3>
 
-                <div class="w-full flex flex-col items-center scale-90 md:scale-100 origin-top">
+                <div class="w-full flex flex-col items-center transform scale-[0.85] sm:scale-95 origin-top font-sans">
+                    <!-- 出力層 -->
+                    <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[10px] font-bold py-1 w-32 text-center mb-1" :class="{active: mapLocation === 'softmax'}">Softmax</div>
+                    <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[10px] font-bold py-1 w-32 text-center mb-2" :class="{active: mapLocation === 'linear'}">Linear</div>
 
-                    <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[10px] font-bold p-1.5 w-36 text-center mb-1" :class="{active: mapLocation === 'softmax'}">
-                        Softmax (確率出力)
-                    </div>
-                    <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[10px] font-bold p-1.5 w-36 text-center mb-3" :class="{active: mapLocation === 'linear'}">
-                        Linear (線形変換)
-                    </div>
+                    <div class="flex items-end gap-3 w-full justify-center">
 
-                    <div class="flex items-end gap-4 w-full justify-center">
+                        <!-- Encoder -->
+                        <div class="border-2 border-dashed border-sky-300 bg-sky-50/40 p-1.5 rounded-lg flex flex-col items-center w-28">
+                            <span class="text-[9px] font-bold text-sky-600 mb-1">Encoder</span>
 
-                        <div class="border-2 border-dashed border-sky-300 bg-sky-50/30 p-2 rounded-lg flex flex-col items-center w-28">
-                            <span class="text-[9px] font-bold text-sky-600 mb-2">Encoder (N倍)</span>
-
-                            <div class="w-full h-6 border border-slate-300 bg-slate-100 text-[9px] rounded flex items-center justify-center font-bold mb-3 opacity-30">
-                                Feed Forward
-                            </div>
-
-                            <div class="arch-block w-full h-10 border-2 border-slate-400 bg-slate-100 text-[9px] rounded flex flex-col items-center justify-center font-bold text-center" :class="{active: mapLocation === 'enc-attn'}">
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 text-[9px] rounded py-1 text-center font-bold mb-1" :class="{active: mapLocation === 'enc-addnorm2'}">Add & Norm</div>
+                            <div class="arch-block w-full border-2 border-slate-400 bg-slate-100 text-[9px] rounded py-2 text-center font-bold mb-1" :class="{active: mapLocation === 'enc-ffn'}">Feed<br>Forward</div>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 text-[9px] rounded py-1 text-center font-bold mb-1" :class="{active: mapLocation === 'enc-addnorm1'}">Add & Norm</div>
+                            <div class="arch-block w-full border-2 border-slate-400 bg-slate-100 text-[9px] rounded py-2 flex flex-col items-center justify-center font-bold" :class="{active: mapLocation === 'enc-attn'}">
                                 <span>Multi-Head</span>
                                 <span>Attention</span>
                             </div>
                         </div>
 
-                        <div class="border-2 border-dashed border-purple-300 bg-purple-50/30 p-2 rounded-lg flex flex-col items-center w-32">
-                            <span class="text-[9px] font-bold text-purple-600 mb-2">Decoder (N倍)</span>
+                        <!-- Decoder -->
+                        <div class="border-2 border-dashed border-purple-300 bg-purple-50/40 p-1.5 rounded-lg flex flex-col items-center w-32">
+                            <span class="text-[9px] font-bold text-purple-600 mb-1">Decoder</span>
 
-                            <div class="w-full h-6 border border-slate-300 bg-slate-100 text-[9px] rounded flex items-center justify-center font-bold mb-2 opacity-30">
-                                Feed Forward
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 text-[9px] rounded py-1 text-center font-bold mb-1" :class="{active: mapLocation === 'dec-addnorm3'}">Add & Norm</div>
+                            <div class="arch-block w-full border-2 border-slate-400 bg-slate-100 text-[9px] rounded py-2 text-center font-bold mb-1" :class="{active: mapLocation === 'dec-ffn'}">Feed<br>Forward</div>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 text-[9px] rounded py-1 text-center font-bold mb-1" :class="{active: mapLocation === 'dec-addnorm2'}">Add & Norm</div>
+                            <div class="arch-block w-full border-2 border-slate-400 bg-slate-100 text-[9px] rounded py-1 text-center font-bold mb-1" :class="{active: mapLocation === 'cross-attn'}">
+                                <span>Multi-Head</span><br>
+                                <span class="text-[7.5px] text-emerald-600 font-mono">Cross Attn</span>
                             </div>
-
-                            <div class="arch-block w-full h-10 border-2 border-slate-400 bg-slate-100 text-[9px] rounded flex flex-col items-center justify-center font-bold text-center mb-2" :class="{active: mapLocation === 'cross-attn'}">
-                                <span>Multi-Head</span>
-                                <span class="text-[8px] text-emerald-600 active:text-white font-mono">Enc-Dec Attn</span>
-                            </div>
-
-                            <div class="arch-block w-full h-10 border-2 border-slate-400 bg-slate-100 text-[9px] rounded flex flex-col items-center justify-center font-bold text-center" :class="{active: mapLocation === 'dec-attn'}">
-                                <span>Masked Multi</span>
-                                <span>Head Attention</span>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 text-[9px] rounded py-1 text-center font-bold mb-1" :class="{active: mapLocation === 'dec-addnorm1'}">Add & Norm</div>
+                            <div class="arch-block w-full border-2 border-slate-400 bg-slate-100 text-[9px] rounded py-1 text-center font-bold" :class="{active: mapLocation === 'dec-attn'}">
+                                <span>Masked</span><br><span>Multi-Head</span>
                             </div>
                         </div>
-
                     </div>
 
-                    <div class="flex gap-4 w-full justify-center mt-3 border-t pt-3 border-slate-100">
+                    <!-- 埋め込み層 -->
+                    <div class="flex gap-3 w-full justify-center mt-2 pt-2 border-t border-slate-200">
                         <div class="flex flex-col items-center w-28">
-                            <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[8px] font-bold p-1 w-full text-center mb-1" :class="{active: mapLocation === 'enc-pe'}">
-                                Positional Encoding
-                            </div>
-                            <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[8px] font-bold p-1 w-full text-center" :class="{active: mapLocation === 'enc-embed'}">
-                                Input Embedding
-                            </div>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 rounded text-[8px] font-bold py-1 text-center mb-1" :class="{active: mapLocation === 'enc-pe'}">Positional Enc</div>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 rounded text-[8px] font-bold py-1 text-center" :class="{active: mapLocation === 'enc-embed'}">Input Embed</div>
                         </div>
-
                         <div class="flex flex-col items-center w-32">
-                            <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[8px] font-bold p-1 w-full text-center mb-1" :class="{active: mapLocation === 'dec-pe'}">
-                                Positional Encoding
-                            </div>
-                            <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[8px] font-bold p-1 w-full text-center" :class="{active: mapLocation === 'dec-embed'}">
-                                Output Embedding
-                            </div>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 rounded text-[8px] font-bold py-1 text-center mb-1" :class="{active: mapLocation === 'dec-pe'}">Positional Enc</div>
+                            <div class="arch-block w-full border border-slate-300 bg-slate-100 rounded text-[8px] font-bold py-1 text-center" :class="{active: mapLocation === 'dec-embed'}">Output Embed</div>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            <div class="lg:col-span-5 bg-slate-900 text-slate-100 border border-slate-800 rounded-xl p-5 shadow-sm overflow-hidden">
-                <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
-                    <h3 class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        計算データ（2単語×3次元ベクトル）
-                    </h3>
+            <!-- 右側 行列データ -->
+            <div class="lg:col-span-6 bg-slate-900 text-slate-100 border border-slate-800 rounded-xl p-4 shadow-sm overflow-hidden flex flex-col h-full">
+                <div class="text-[10px] font-semibold text-slate-400 mb-3 border-b border-slate-800 pb-1">
+                    データテンソル（4次元化表現）
                 </div>
 
-                <div class="w-full overflow-x-auto pb-4">
-                    <div class="flex flex-nowrap items-center justify-start gap-4 bg-slate-950/40 p-3 rounded-xl border border-slate-850 min-w-max">
+                <div class="w-full overflow-x-auto pb-2 flex-1 flex items-center">
+                    <div class="flex flex-nowrap items-center justify-start gap-4 min-w-max bg-slate-950 p-4 rounded-lg border border-slate-800">
 
-                        <div class="shrink-0">
-                            <div class="text-[9px] text-slate-400 mb-1.5 font-mono font-bold uppercase tracking-wider">{{ matrixALabel }}</div>
-                            <table class="text-xs font-mono" v-if="matrixAData.length > 0">
+                        <!-- 入力A -->
+                        <div class="shrink-0 flex flex-col">
+                            <div class="text-[9px] text-sky-400 mb-1 font-mono uppercase tracking-widest">{{ matrixALabel }}</div>
+                            <table class="text-[10px] font-mono">
                                 <tr v-for="(row, i) in matrixAData" :key="i">
-                                    <td class="pr-2 text-slate-500 font-sans text-right min-w-[32px] text-[10px] whitespace-nowrap">{{ matrixARowLabels[i] || '' }}</td>
-                                    <td v-for="(val, j) in row" :key="j" :class="['border border-slate-800 p-2 w-12 text-center font-bold', cellColor(val)]">
+                                    <td class="pr-2 text-slate-500 text-right w-8">{{ matrixARowLabels[i] }}</td>
+                                    <td v-for="(val, j) in row" :key="j" :class="['border border-slate-700 p-1.5 w-10 text-center', cellColor(val)]">
                                         {{ formatNum(val) }}
                                     </td>
                                 </tr>
                             </table>
-                            <div v-else class="text-xs text-slate-600 italic p-2">なし</div>
                         </div>
 
-                        <div v-if="matrixBLabel" class="flex flex-col items-center justify-center shrink-0">
-                            <span class="text-slate-500 text-sm font-bold px-0.5">{{ operationSymbol }}</span>
+                        <!-- オペレータ -->
+                        <div v-if="matrixBLabel" class="shrink-0 px-2 flex flex-col items-center">
+                            <span class="text-slate-400 text-xs font-bold">{{ operationSymbol }}</span>
                         </div>
 
-                        <div v-if="matrixBLabel" class="shrink-0">
-                            <div class="text-[9px] text-slate-400 mb-1.5 font-mono font-bold uppercase tracking-wider">{{ matrixBLabel }}</div>
-                            <table class="text-xs font-mono" v-if="matrixBData.length > 0">
+                        <!-- 入力B -->
+                        <div v-if="matrixBLabel" class="shrink-0 flex flex-col">
+                            <div class="text-[9px] text-purple-400 mb-1 font-mono uppercase tracking-widest">{{ matrixBLabel }}</div>
+                            <table class="text-[10px] font-mono">
                                 <tr v-for="(row, i) in matrixBData" :key="i">
-                                    <td class="pr-2 text-slate-500 font-sans text-right min-w-[15px] text-[10px] whitespace-nowrap">{{ matrixBRowLabels[i] || '' }}</td>
-                                    <td v-for="(val, j) in row" :key="j" :class="['border border-slate-800 p-2 w-12 text-center font-bold', cellColor(val)]">
+                                    <td class="pr-2 text-slate-500 text-right w-8">{{ matrixBRowLabels[i] }}</td>
+                                    <td v-for="(val, j) in row" :key="j" :class="['border border-slate-700 p-1.5 w-10 text-center', cellColor(val)]">
                                         {{ formatNum(val) }}
                                     </td>
                                 </tr>
                             </table>
                         </div>
 
-                        <div class="flex items-center justify-center px-0.5 shrink-0">
-                            <span class="text-blue-500 text-lg font-bold font-mono">→</span>
+                        <!-- 結果矢印 -->
+                        <div class="shrink-0 px-2 flex items-center">
+                            <span class="text-amber-500 text-lg">→</span>
                         </div>
 
-                        <div class="shrink-0">
-                            <div class="text-[9px] text-amber-400 mb-1.5 font-mono font-bold uppercase tracking-wider">{{ matrixResultLabel }}</div>
-                            <table class="text-xs font-mono" v-if="matrixResultData.length > 0">
+                        <!-- 出力 -->
+                        <div class="shrink-0 flex flex-col">
+                            <div class="text-[9px] text-amber-400 mb-1 font-mono uppercase tracking-widest">{{ matrixResultLabel }}</div>
+                            <table class="text-[10px] font-mono">
                                 <tr v-for="(row, i) in matrixResultData" :key="i">
-                                    <td class="pr-2 text-amber-600/70 font-sans text-right min-w-[32px] text-[10px] whitespace-nowrap">{{ matrixResultRowLabels[i] || '' }}</td>
-                                    <td v-for="(val, j) in row" :key="j" :class="['border border-amber-900/40 p-2 w-12 text-center font-bold bg-slate-950', cellColor(val)]">
+                                    <td class="pr-2 text-amber-700 text-right w-8">{{ matrixResultRowLabels[i] }}</td>
+                                    <td v-for="(val, j) in row" :key="j" :class="['border border-amber-900/50 bg-slate-900 p-1.5 w-10 text-center', cellColor(val)]">
                                         {{ formatNum(val) }}
                                     </td>
                                 </tr>
                             </table>
                         </div>
-
                     </div>
                 </div>
-
-                <div v-if="mode === 'learning' && step === 12" class="mt-2 p-3 bg-rose-950/20 border border-rose-900/40 rounded-lg">
-                    <p class="text-[11px] text-rose-300 leading-relaxed">
-                        未来の単語スコアを $${-\infty}$$ にすることで、Softmax計算時に消滅させます。中央マップのデコーダー最下部で発動しています。
-                    </p>
-                </div>
-
             </div>
 
         </div>
@@ -232,308 +210,241 @@
                     step.value = 1;
                 };
 
-                const maxSteps = computed(() => mode.value === 'learning' ? 17 : 12);
-
+                const maxSteps = computed(() => mode.value === 'learning' ? 27 : 19);
                 const nextStep = () => { if (step.value < maxSteps.value) step.value++; };
                 const prevStep = () => { if (step.value > 1) step.value--; };
 
                 const formatNum = (val) => {
-                    if (val === null || val === undefined) return '';
                     if (val === -999) return '-∞';
                     return Number(val).toFixed(2);
                 };
 
                 const cellColor = (val) => {
-                    if (val === -999) return 'text-rose-600 bg-rose-950/50 border-rose-950';
-                    if (val > 0) return 'text-blue-400 bg-blue-950/20 border-blue-900/40';
-                    if (val < 0) return 'text-rose-400 bg-rose-950/20 border-rose-900/40';
-                    return 'text-slate-600 bg-slate-950 border-slate-900';
+                    if (val === -999) return 'text-rose-500 bg-rose-950/30';
+                    if (val > 0.5) return 'text-blue-300 bg-blue-900/20';
+                    if (val < -0.5) return 'text-rose-300 bg-rose-900/20';
+                    return 'text-slate-400';
                 };
 
-                const encWords = ['I', 'am'];
-                const decWords = ['<BOS>', '私'];
+                const wEnc = ['I', 'am'];
+                const wDec = ['<BOS>', '私'];
 
-                const dataRegistry = {
-                    encEmbed: [[1.00, 0.20, -0.50], [-0.20, 1.00, 0.60]],
-                    posEnc: [[0.50, 0.10, 0.20], [0.20, 0.50, 0.10]],
-                    encSum: [[1.50, 0.30, -0.30], [0.00, 1.50, 0.70]],
-                    encQ: [[1.50, 0.30, -0.30], [0.00, 1.50, 0.70]],
-                    encK: [[1.50, 0.30, -0.30], [0.00, 1.50, 0.70]],
-                    encV: [[0.70, 0.50, 0.00], [0.30, 1.00, 0.80]],
-                    encDot: [[2.43, 0.24], [0.24, 2.74]],
-                    encScaled: [[1.40, 0.14], [0.14, 1.58]],
-                    encSoftmax: [[0.78, 0.22], [0.19, 0.81]],
-                    encOutput: [[0.62, 0.61, 0.18], [0.37, 0.91, 0.65]],
-                    decEmbed: [[0.60, 0.60, 0.40], [0.90, 0.60, -0.20]],
-                    decSum: [[1.10, 0.70, 0.60], [1.10, 1.10, -0.10]],
-                    decQ: [[1.10, 0.70, 0.60], [1.10, 1.10, -0.10]],
-                    decK: [[1.10, 0.70, 0.60], [1.10, 1.10, -0.10]],
-                    decV: [[0.50, 0.20, 0.90], [0.10, 0.80, 0.40]],
-                    decDot: [[2.06, 1.92], [1.92, 2.43]],
-                    decScaled: [[1.19, 1.11], [1.11, 1.40]],
-                    decMasked: [[1.19, -999], [1.11, 1.40]],
-                    decSoftmax: [[1.00, 0.00], [0.43, 0.57]],
-                    decSelfAttnOut: [[0.50, 0.20, 0.90], [0.27, 0.54, 0.62]],
-                    crossDot: [[2.15, 1.33], [1.38, 1.24]],
-                    crossScaled: [[1.24, 0.77], [0.80, 0.72]],
-                    crossSoftmax: [[0.62, 0.38], [0.52, 0.48]],
-                    crossOut: [[0.55, 0.69, 0.30], [0.51, 0.74, 0.38]],
-                    linearOut: [[2.50, 0.20, 0.20, 0.20], [0.20, 0.30, 0.20, 3.10]],
-                    finalProb: [[0.85, 0.05, 0.05, 0.05], [0.04, 0.05, 0.04, 0.87]],
+                // データ（4次元: d_model=4, 2ヘッド×2次元）
+                const d = {
+                    eEmb: [[1.0, 0.2, -0.5, 0.1], [-0.2, 1.0, 0.6, -0.3]],
+                    ePE: [[0.0, 0.1, 0.0, 0.1], [0.8, 0.5, -0.8, -0.5]],
+                    eIn: [[1.0, 0.3, -0.5, 0.2], [0.6, 1.5, -0.2, -0.8]], // eEmb + ePE
 
-                    decEmbedInf: [[0.60, 0.60, 0.40]],
-                    decSumInf: [[1.10, 0.70, 0.60]],
-                    decQInf: [[1.10, 0.70, 0.60]],
-                    decKInf: [[1.10, 0.70, 0.60]],
-                    decVInf: [[0.50, 0.20, 0.90]],
-                    decDotInf: [[2.06]],
-                    decScaledInf: [[1.19]],
-                    decSoftmaxInf: [[1.00]],
-                    decSelfAttnOutInf: [[0.50, 0.20, 0.90]],
-                    crossDotInf: [[2.15, 1.33]],
-                    crossScaledInf: [[1.24, 0.77]],
-                    crossSoftmaxInf: [[0.62, 0.38]],
-                    crossOutInf: [[0.55, 0.69, 0.30]],
-                    linearOutInf: [[2.50, 0.20, 0.20, 0.20]],
-                    finalProbInf: [[0.85, 0.05, 0.05, 0.05]]
+                    eQ: [[1.2, 0.4, -0.3, 0.5], [0.8, 1.6, 0.1, -0.6]],
+                    eK: [[1.0, 0.5, -0.2, 0.4], [0.7, 1.4, 0.2, -0.5]],
+                    eV: [[0.9, 0.2, 0.4, 0.1], [0.5, 1.1, -0.3, 0.8]],
+
+                    // Split (2ヘッド化表現用)
+                    eQSplit: [[1.2, 0.4], [-0.3, 0.5], [0.8, 1.6], [0.1, -0.6]], // H1(I), H2(I), H1(am), H2(am) 的な見せ方
+
+                    eScore: [[1.4, 1.1], [1.1, 2.8]], // Q * K^T (モック)
+                    eScaled: [[0.99, 0.77], [0.77, 1.98]],
+                    eSoft: [[0.55, 0.45], [0.22, 0.78]],
+
+                    eAttnOut: [[0.7, 0.6, 0.1, 0.4], [0.6, 0.9, -0.1, 0.6]], // Soft * V (Concat後)
+                    eRes1: [[1.7, 0.9, -0.4, 0.6], [1.2, 2.4, -0.3, -0.2]], // eIn + eAttnOut
+                    eNorm1: [[1.2, 0.4, -1.0, 0.0], [0.5, 1.5, -0.8, -0.7]], // LayerNorm(eRes1)
+
+                    eFFNOut: [[1.5, 0.2, -0.8, 0.1], [0.8, 1.8, -0.5, -0.4]],
+                    eRes2: [[2.7, 0.6, -1.8, 0.1], [1.3, 3.3, -1.3, -1.1]],
+                    eNorm2: [[1.4, -0.2, -1.2, 0.0], [0.2, 1.5, -0.9, -0.8]], // 最終Encoder出力
+
+                    dEmb: [[0.8, -0.2, 0.3, 0.5], [1.1, 0.4, -0.1, 0.2]],
+                    dPE: [[0.0, 0.1, 0.0, 0.1], [0.8, 0.5, -0.8, -0.5]],
+                    dIn: [[0.8, -0.1, 0.3, 0.6], [1.9, 0.9, -0.9, -0.3]],
+
+                    dQ: [[0.9, 0.1, 0.4, 0.5], [1.8, 0.8, -0.8, -0.2]],
+                    dScore: [[0.8, 1.4], [1.2, 2.1]],
+                    dMasked: [[0.8, -999], [1.2, 2.1]],
+                    dSoft: [[1.0, 0.0], [0.28, 0.72]],
+
+                    dAttnOut: [[0.7, 0.2, 0.5, 0.4], [1.2, 0.6, -0.3, 0.1]],
+                    dNorm1: [[1.0, 0.0, 0.8, 0.6], [1.5, 0.8, -0.5, 0.0]],
+
+                    cScore: [[1.5, 0.8], [0.9, 1.7]], // dNorm1(Q) * eNorm2(K)
+                    cSoft: [[0.67, 0.33], [0.31, 0.69]],
+                    cAttnOut: [[1.1, 0.1, -0.5, 0.2], [0.6, 1.2, -0.8, -0.6]],
+                    dNorm2: [[1.2, 0.0, -0.4, 0.3], [0.8, 1.0, -0.6, -0.4]],
+
+                    dFFNOut: [[1.4, 0.2, -0.2, 0.5], [0.9, 1.1, -0.4, -0.2]],
+                    dNorm3: [[1.3, 0.1, -0.3, 0.4], [0.8, 1.0, -0.5, -0.3]],
+
+                    logits: [[-1.2, 3.4, 0.5, -0.2], [0.1, 0.4, 2.8, -1.5]], // 語彙数=4
+                    probs: [[0.01, 0.89, 0.08, 0.02], [0.05, 0.08, 0.85, 0.02]], // 私, 学生
+
+                    // 推論用モック
+                    dIn1: [[0.8, -0.1, 0.3, 0.6]],
+                    dQ1: [[0.9, 0.1, 0.4, 0.5]],
+                    dScore1: [[0.8]], // 自分自身のみ
+                    dSoft1: [[1.0]],
+                    dNorm1_1: [[1.0, 0.0, 0.8, 0.6]],
+                    cScore1: [[1.5, 0.8]],
+                    cSoft1: [[0.67, 0.33]],
+                    cAttnOut1: [[1.1, 0.1, -0.5, 0.2]],
+                    dNorm3_1: [[1.3, 0.1, -0.3, 0.4]],
+                    logits1: [[-1.2, 3.4, 0.5, -0.2]],
+                    probs1: [[0.01, 0.89, 0.08, 0.02]]
                 };
 
                 const learningSteps = [
-                    {
-                        title: "1. エンコーダー：単語の意味を数値化",
-                        unit: "Encoder Embedding", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-embed",
-                        desc: ["AIは文字を直接計算できません。入力された単語を、意味を表現する空間の座標（ベクトル）に変換します。これがすべての基礎です。"],
-                        formula: "Embedding(単語) -> 3次元座標",
-                        mALabel: "入力単語", mARows: encWords, mAData: [[]], op: "変換", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：単語意味行列", mRRows: encWords, mRData: dataRegistry.encEmbed
-                    },
-                    {
-                        title: "2. エンコーダー：並び順の目印作り",
-                        unit: "Encoder Positional Encoding", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-pe",
-                        desc: ["Transformerは全単語を一瞬で同時処理するため、単語の前後順がわからなくなります。それを防ぐため、位置を示す特殊な波の数式パターンを用意します。"],
-                        formula: "PE = 位置特有の数値パターン",
-                        mALabel: "単語位置", mARows: ["0(I)", "1(am)"], mAData: [[]], op: "生成", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：位置目印行列", mRRows: encWords, mRData: dataRegistry.posEnc
-                    },
-                    {
-                        title: "3. エンコーダー：意味と位置の合体",
-                        unit: "Encoder Input Preparation", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-embed",
-                        desc: ["単語の意味ベクトルと位置の目印ベクトルを単純に足し合わせます。「どこにある、どんな意味の単語か」という最強の基礎データをここで作成します。"],
-                        formula: "入力ベクトル = 意味 + 位置",
-                        mALabel: "単語意味行列", mARows: encWords, mAData: dataRegistry.encEmbed, op: "＋", mBLabel: "位置目印行列", mBRows: encWords, mBData: dataRegistry.posEnc,
-                        mRLabel: "出力：位置付き意味行列", mRRows: encWords, mRData: dataRegistry.encSum
-                    },
-                    {
-                        title: "4. エンコーダー：3つの役割への分裂",
-                        unit: "Encoder Linear Projection", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-attn",
-                        desc: ["単語同士を対話させるため、データを「質問状(Q)」「看板(K)」「中身(V)」の3つに分裂させます（画面はVの例）。"],
-                        formula: "V = 入力ベクトル × 重み",
-                        mALabel: "位置付き意味行列", mARows: encWords, mAData: dataRegistry.encSum, op: "× 重み", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：バリュー行列 V", mRRows: encWords, mRData: dataRegistry.encV
-                    },
-                    {
-                        title: "5. エンコーダー：総当たり相性チェック",
-                        unit: "Encoder Scaled Dot-Product", badge: "bg-blue-950 text-blue-400 border border-blue-900", loc: "enc-attn",
-                        desc: ["自分の「質問状(Q)」と相手の「看板(K)」を掛け算し、文脈上でどの単語同士が深く結びついているかの生得点を出します。"],
-                        formula: "スコア = Q × K^T",
-                        mALabel: "クエリ行列 Q", mARows: encWords, mAData: dataRegistry.encQ, op: "× K^T", mBLabel: "キーの転置行列 K^T", mBRows: ["I", "am"], mBData: [[1.5, 0.0], [0.3, 1.5], [-0.3, 0.7]],
-                        mRLabel: "出力：未調整の相性スコア", mRRows: encWords, mRData: dataRegistry.encDot
-                    },
-                    {
-                        title: "6. エンコーダー：数値爆発を防ぐブレーキ",
-                        unit: "Encoder Scaled Dot-Product", badge: "bg-blue-950 text-blue-400 border border-blue-900", loc: "enc-attn",
-                        desc: ["ベクトルの次元数（今回は√3 ≒ 1.732）でスコアを割ります。数値が大きくなりすぎて、学習のブレーキが効かなくなる現象（勾配消失）を防ぎます。"],
-                        formula: "調整スコア = スコア ÷ √d_k",
-                        mALabel: "未調整スコア", mARows: encWords, mAData: dataRegistry.encDot, op: "÷ 1.732", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：調整後スコア", mRRows: encWords, mRData: dataRegistry.encScaled
-                    },
-                    {
-                        title: "7. エンコーダー：注目度を合計100%化",
-                        unit: "Encoder Scaled Dot-Product", badge: "bg-blue-950 text-blue-400 border border-blue-900", loc: "enc-attn",
-                        desc: ["Softmax関数を使い、単語への注目度を合計1.00(100%)の確率配分に変形します。これで綺麗な割合データになります。"],
-                        formula: "注目度 = Softmax(調整スコア)",
-                        mALabel: "調整後スコア", mARows: encWords, mAData: dataRegistry.encScaled, op: "Softmax", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：注目度(%)行列", mRRows: encWords, mRData: dataRegistry.encSoftmax
-                    },
-                    {
-                        title: "8. エンコーダー：周りの文脈のブレンド",
-                        unit: "Encoder Self Attention Out", badge: "bg-blue-950 text-blue-400 border border-blue-900", loc: "enc-attn",
-                        desc: ["割り出した注目度(%)を、単語の「中身(V)」に掛け合わせます。これで周りの文脈をたっぷりと吸い込んだ、深い意味のデータが完成します。"],
-                        formula: "文脈ベクトル = 注目度 × V",
-                        mALabel: "注目度(%)行列", mARows: encWords, mAData: dataRegistry.encSoftmax, op: "×", mBLabel: "バリュー行列 V", mBRows: encWords, mBData: dataRegistry.encV,
-                        mRLabel: "出力：エンコーダー最終表現", mRRows: encWords, mRData: dataRegistry.encOutput
-                    },
-                    {
-                        title: "9. デコーダー：出力側の基礎データ用意",
-                        unit: "Decoder Input Preparation", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-embed",
-                        desc: ["学習モードでは、正解の「<BOS>」と「私」が同時に一括入力されます。エンコーダー同様に意味と位置を重ね合わせた行列を作ります。"],
-                        formula: "デコーダー入力 = 意味 + 位置",
-                        mALabel: "正解の単語意味", mARows: decWords, mAData: dataRegistry.decEmbed, op: "＋ 位置PE", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：デコーダー基礎入力", mRRows: decWords, mRData: dataRegistry.decSum
-                    },
-                    {
-                        title: "10. デコーダー：出力側での3役分裂",
-                        unit: "Decoder Linear Projection", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-attn",
-                        desc: ["日本語（出力）側の単語同士のつながりを調べるために、デコーダー入力からQ, K, Vをあぶり出します。"],
-                        formula: "Q_dec = デコーダー入力 × 重み",
-                        mALabel: "デコーダー基礎入力", mARows: decWords, mAData: dataRegistry.decSum, op: "× 重み", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：デコーダークエリ Q", mRRows: decWords, mRData: dataRegistry.decQ
-                    },
-                    {
-                        title: "11. デコーダー：カンニング可能な仮スコア",
-                        unit: "Decoder Masked Attention", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-attn",
-                        desc: ["デコーダーのQとKを掛け合わせて仮スコアを作ります。この状態では、まだ1語目が未来の2語目（私）の情報を覗き見できてしまいます。"],
-                        formula: "仮スコア = (Q_dec × K_dec^T) ÷ √d_k",
-                        mALabel: "デコーダークエリ Q", mARows: decWords, mAData: dataRegistry.decQ, op: "内積・スケール", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：未マスクの出力スコア", mRRows: decWords, mRData: dataRegistry.decScaled
-                    },
-                    {
-                        title: "12. デコーダー：未来を隠す「目隠しマスク」",
-                        unit: "Decoder Masked Attention", badge: "bg-rose-950 text-rose-400 border border-rose-900", loc: "dec-attn",
-                        desc: ["1語目から見て未来にある2語目のスコアを強制的に『-∞（マイナス無限大）』に書き換えます。未来の情報へ進む道を物理的に遮断します。"],
-                        formula: "未来のスコア = -∞",
-                        mALabel: "未マスクの出力スコア", mARows: decWords, mAData: dataRegistry.decScaled, op: "未来を遮断", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：マスク適用後のスコア", mRRows: decWords, mRData: dataRegistry.decMasked
-                    },
-                    {
-                        title: "13. デコーダー：過去だけを振り返る文脈ブレンド",
-                        unit: "Decoder Masked Attention Out", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-attn",
-                        desc: ["マスクされたスコアをSoftmaxにかけると、未来の確率は綺麗に0%になります。これにVを掛け算し、未来を予測するための過去の文脈を完成させます。"],
-                        formula: "デコーダー自己注意出力",
-                        mALabel: "マスク適用後のスコア", mARows: decWords, mAData: dataRegistry.decMasked, op: "Softmax×V", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：デコーダー側文脈行列", mRRows: decWords, mRData: dataRegistry.decSelfAttnOut
-                    },
-                    {
-                        title: "14. クロス注意：言語の壁を越えた質問投げ",
-                        unit: "Encoder-Decoder Attention", badge: "bg-emerald-950 text-emerald-400 border border-emerald-900", loc: "cross-attn",
-                        desc: ["デコーダー側の質問状(Q)と、エンコーダーが作った英語の看板(K)を掛け算します。これが『通訳の核心』であり、日本語から英語への問い合わせです。"],
-                        formula: "クロススコア = Q_dec × K_enc^T ÷ スケール",
-                        mALabel: "デコーダー側クエリ Q", mARows: decWords, mAData: dataRegistry.decQ, op: "× K_enc^T ÷ スケール", mBLabel: "エンコーダーキー K^T", mBRows: encWords, mBData: [[1.5, 0.0], [0.3, 1.5], [-0.3, 0.7]],
-                        mRLabel: "出力：クロス注意スコア", mRRows: decWords, mRData: dataRegistry.crossScaled
-                    },
-                    {
-                        title: "15. クロス注意：英語の意味の引き連れ",
-                        unit: "Encoder-Decoder Attention Out", badge: "bg-emerald-950 text-emerald-400 border border-emerald-900", loc: "cross-attn",
-                        desc: ["日米の単語ペアの注目度に、英語側の中身(V)を掛け算します。英語のニュアンスをしっかり含んだ、翻訳専用のハイブリッドベクトルを作ります。"],
-                        formula: "クロス表現 = Softmax(スコア) × V_enc",
-                        mALabel: "クロス注意スコア", mARows: decWords, mAData: dataRegistry.crossScaled, op: "Softmax×V_enc", mBLabel: "エンコーダーバリュー V", mBRows: encWords, mBData: dataRegistry.encV,
-                        mRLabel: "出力：翻訳ヒント付き行列", mRRows: decWords, mRData: dataRegistry.crossOut
-                    },
-                    {
-                        title: "16. 最終線形層：辞書サイズへの引き伸ばし",
-                        unit: "Linear Projection Layer", badge: "bg-slate-800 text-slate-300 border border-slate-700", loc: "linear",
-                        desc: ["3次元のコンパクトな脳内数値を、AIが知っている全単語（今回は『私』『学生』『です』『<EOS>』の4つ）の得点板（4次元）へと引き伸ばします。"],
-                        formula: "ロジット = 翻訳ヒント × 全語彙重み",
-                        mALabel: "翻訳ヒント付き行列", mARows: decWords, mAData: dataRegistry.crossOut, op: "× 全語彙重み", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：単語ごとの生の得点板", mRRows: decWords, mRData: dataRegistry.linearOut
-                    },
-                    {
-                        title: "17. 最終Softmax層：次に出る単語の確率決定",
-                        unit: "Final Softmax Layer", badge: "bg-slate-800 text-slate-300 border border-slate-700", loc: "softmax",
-                        desc: ["生の得点を確率(%)に直します。1語目の次は『私』が85%で1位と予測されました。この確率をもとに学習を回し、正解へ近づけていきます。"],
-                        formula: "出現確率 = Softmax(得点板)",
-                        mALabel: "単語ごとの生の得点板", mARows: decWords, mAData: dataRegistry.linearOut, op: "Softmax", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：最終予測確率分布", mRRows: ["1語目の予測", "2語目の予測"], mRData: dataRegistry.finalProb
-                    }
+                    { t: "1. 英語の単語をベクトル化", u: "Input Embedding", b: "bg-sky-900 text-sky-300", l: "enc-embed",
+                      desc: ["英語「I am」を4次元の意味ベクトルに変換します。これがすべての素材になります。"], f: "Embed(x)",
+                      ma: "入力単語", rA: wEnc, da: [[]], op: "変換", mb: null, rB: [], db: null, mr: "単語ベクトル", rR: wEnc, dr: d.eEmb },
+                    { t: "2. 位置の波を作成", u: "Positional Encoding", b: "bg-sky-900 text-sky-300", l: "enc-pe",
+                      desc: ["単語の並び順（0番目、1番目）をAIに教えるための波の数値を生成します。"], f: "PE = sin/cos",
+                      ma: "位置(0,1)", rA: wEnc, da: [[]], op: "生成", mb: null, rB: [], db: null, mr: "位置ベクトル", rR: wEnc, dr: d.ePE },
+                    { t: "3. 意味と位置の合体", u: "Embed + PE", b: "bg-sky-900 text-sky-300", l: "enc-embed",
+                      desc: ["意味ベクトルと位置ベクトルを足し算し、エンコーダーの基礎入力を作ります。"], f: "X = Embed + PE",
+                      ma: "単語ベクトル", rA: wEnc, da: d.eEmb, op: "＋", mb: "位置", rB: wEnc, db: d.ePE, mr: "エンコーダー入力", rR: wEnc, dr: d.eIn },
+
+                    { t: "4. Q, K, Vへの分裂", u: "Q, K, V Projection", b: "bg-blue-900 text-blue-300", l: "enc-attn",
+                      desc: ["対話のためにデータを「質問(Q)」「看板(K)」「中身(V)」に増やします。"], f: "Q = X * Wq",
+                      ma: "入力", rA: wEnc, da: d.eIn, op: "×重み", mb: null, rB: [], db: null, mr: "クエリ(Q)", rR: wEnc, dr: d.eQ },
+                    { t: "5. ヘッドの分割", u: "Multi-Head Split", b: "bg-blue-900 text-blue-300", l: "enc-attn",
+                      desc: ["4次元のデータを2次元×2つの「ヘッド（視点）」に切り分け、多角的に文章を分析します。"], f: "Split(Q)",
+                      ma: "クエリ(Q) 4次元", rA: wEnc, da: d.eQ, op: "分割", mb: null, rB: [], db: null, mr: "Head 1 & 2 (2次元)", rR: ['I(H1)','I(H2)','am(H1)','am(H2)'], dr: d.eQSplit },
+                    { t: "6. 総当たり相性チェック", u: "MatMul (Q × K)", b: "bg-blue-900 text-blue-300", l: "enc-attn",
+                      desc: ["QとKを掛け合わせて、単語同士の結びつきの強さ（スコア）を出します。"], f: "Q * K^T",
+                      ma: "クエリ(Q)", rA: wEnc, da: d.eQ, op: "× Kの転置", mb: "キー(K^T)", rB: wEnc, db: [[1.0, 0.7],[0.5, 1.4],[-0.2, 0.2],[0.4,-0.5]], mr: "生スコア", rR: wEnc, dr: d.eScore },
+                    { t: "7. ブレーキ（スケールダウン）", u: "Scale", b: "bg-blue-900 text-blue-300", l: "enc-attn",
+                      desc: ["次元数のルート(√2)で割り、数値が大きくなりすぎて学習が壊れるのを防ぎます。"], f: "Score / √d_k",
+                      ma: "生スコア", rA: wEnc, da: d.eScore, op: "÷ 1.414", mb: null, rB: [], db: null, mr: "スケール後", rR: wEnc, dr: d.eScaled },
+                    { t: "8. 割合(100%)に変換", u: "Softmax", b: "bg-blue-900 text-blue-300", l: "enc-attn",
+                      desc: ["Softmax関数で、どの単語に何%注目すべきかの確率分布に直します。"], f: "Softmax(X)",
+                      ma: "スケール後", rA: wEnc, da: d.eScaled, op: "Softmax", mb: null, rB: [], db: null, mr: "注目度(%)", rR: wEnc, dr: d.eSoft },
+                    { t: "9. 文脈の回収と結合", u: "Attention × V", b: "bg-blue-900 text-blue-300", l: "enc-attn",
+                      desc: ["注目度にVを掛け、分割したヘッドを再び4次元に結合。文脈を吸収したデータが完成。"], f: "Concat(Attn * V)",
+                      ma: "注目度(%)", rA: wEnc, da: d.eSoft, op: "× V & 結合", mb: "バリュー(V)", rB: wEnc, db: d.eV, mr: "Attention出力", rR: wEnc, dr: d.eAttnOut },
+
+                    { t: "10. 残差接続（迂回路）", u: "Residual Connection", b: "bg-slate-700 text-slate-300", l: "enc-addnorm1",
+                      desc: ["Attentionを通る前の「元の入力」を足し合わせます。元の単語情報を失わないための工夫です。"], f: "Out + Input",
+                      ma: "Attn出力", rA: wEnc, da: d.eAttnOut, op: "＋", mb: "元入力(Step3)", rB: wEnc, db: d.eIn, mr: "残差加算後", rR: wEnc, dr: d.eRes1 },
+                    { t: "11. レイヤー正規化", u: "Layer Normalization", b: "bg-slate-700 text-slate-300", l: "enc-addnorm1",
+                      desc: ["データの平均を0、バラつきを1に整え、AIの学習を安定させます。"], f: "Norm(X)",
+                      ma: "残差加算後", rA: wEnc, da: d.eRes1, op: "正規化", mb: null, rB: [], db: null, mr: "Norm 1 出力", rR: wEnc, dr: d.eNorm1 },
+
+                    { t: "12. 順伝播ネットワーク", u: "Feed Forward", b: "bg-indigo-900 text-indigo-300", l: "enc-ffn",
+                      desc: ["単語ごとに独立して次元を広げ(ReLU関数を適用)、また戻すことで、より複雑な意味を学習します。"], f: "FFN(X)",
+                      ma: "Norm 1 出力", rA: wEnc, da: d.eNorm1, op: "FFN処理", mb: null, rB: [], db: null, mr: "FFN 出力", rR: wEnc, dr: d.eFFNOut },
+                    { t: "13. FFNの残差と正規化", u: "Add & Norm", b: "bg-slate-700 text-slate-300", l: "enc-addnorm2",
+                      desc: ["ここでも元の入力を足し、正規化。これでエンコーダー側の「英語の深い理解」が完了！"], f: "Norm(X + FFN)",
+                      ma: "FFN 出力", rA: wEnc, da: d.eFFNOut, op: "残差＆正規化", mb: null, rB: [], db: null, mr: "Encoder最終出力", rR: wEnc, dr: d.eNorm2 },
+
+                    { t: "14. 日本語の基礎データ作成", u: "Target Embedding", b: "bg-purple-900 text-purple-300", l: "dec-embed",
+                      desc: ["デコーダー側の正解「<BOS> 私」の意味と位置を合体させます。"], f: "X_dec = Emb + PE",
+                      ma: "正解ベクトル", rA: wDec, da: d.dEmb, op: "＋", mb: "位置PE", rB: wDec, db: d.dPE, mr: "デコーダー入力", rR: wDec, dr: d.dIn },
+                    { t: "15. Q, K, V生成とスコア", u: "Decoder Q,K,V", b: "bg-purple-900 text-purple-300", l: "dec-attn",
+                      desc: ["日本語側で自己注意用のQとKを作り、相性スコアを出します。"], f: "Q * K^T / √d_k",
+                      ma: "デコーダーQ", rA: wDec, da: d.dQ, op: "内積", mb: null, rB: [], db: null, mr: "生スコア", rR: wDec, dr: d.dScore },
+                    { t: "16. 未来を隠す目隠しマスク", u: "Future Masking", b: "bg-rose-900 text-rose-300", l: "dec-attn",
+                      desc: ["1語目(<BOS>)が未来の2語目(私)の情報をカンニングできないよう、右上を『-∞』に強制上書きします。"], f: "Mask = -∞",
+                      ma: "生スコア", rA: wDec, da: d.dScore, op: "未来遮断", mb: null, rB: [], db: null, mr: "マスク後スコア", rR: wDec, dr: d.dMasked },
+                    { t: "17. 過去だけの文脈回収", u: "Masked Attention", b: "bg-purple-900 text-purple-300", l: "dec-attn",
+                      desc: ["Softmaxにかけると『-∞』は0%になります。過去だけの情報をVと掛け合わせます。"], f: "Softmax * V",
+                      ma: "マスク後スコア", rA: wDec, da: d.dMasked, op: "Softmax×V", mb: null, rB: [], db: null, mr: "Masked Attn出力", rR: wDec, dr: d.dAttnOut },
+                    { t: "18. デコーダー最初の残差", u: "Add & Norm 1", b: "bg-slate-700 text-slate-300", l: "dec-addnorm1",
+                      desc: ["マスク済みAttention出力に、元のデコーダー入力を足して正規化します。"], f: "Norm(X + Attn)",
+                      ma: "Masked Attn出力", rA: wDec, da: d.dAttnOut, op: "残差＆正規化", mb: null, rB: [], db: null, mr: "Norm 1 出力", rR: wDec, dr: d.dNorm1 },
+
+                    { t: "19. 通訳の核心：クロス注意の準備", u: "Cross Attn Sourcing", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["日本語の質問(Q)と、エンコーダーが作った英語の看板(K)をぶつける準備をします。"], f: "Q_dec, K_enc",
+                      ma: "デコーダーQ(日)", rA: wDec, da: d.dNorm1, op: "対峙", mb: "エンコーダーK(英)", rB: wEnc, db: d.eNorm2, mr: "クロス準備OK", rR: wDec, dr: [[]] },
+                    { t: "20. 日英の相性スコア", u: "Cross Score", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["日本語から英語へ問い合わせを行い、日英間の相性スコアを出します。"], f: "Q_d * K_e^T",
+                      ma: "Q_dec", rA: wDec, da: d.dNorm1, op: "× K_enc^T", mb: null, rB: [], db: null, mr: "クロススコア", rR: wDec, dr: d.cScore },
+                    { t: "21. 英語ヒントの吸収", u: "Cross Attn Out", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["注目度に合わせて英語のVを掛け算し、英語のニュアンスを含んだ翻訳ヒントベクトルを作ります。"], f: "Softmax * V_e",
+                      ma: "クロス割合(%)", rA: wDec, da: d.cSoft, op: "× V_enc", mb: null, rB: [], db: null, mr: "Cross Attn出力", rR: wDec, dr: d.cAttnOut },
+                    { t: "22. クロス注意後の残差", u: "Add & Norm 2", b: "bg-slate-700 text-slate-300", l: "dec-addnorm2",
+                      desc: ["クロス注意の結果に、また元の入力（Step18の出力）を足して正規化。情報を積み重ねます。"], f: "Norm(X+Cross)",
+                      ma: "Cross出力", rA: wDec, da: d.cAttnOut, op: "残差＆正規化", mb: null, rB: [], db: null, mr: "Norm 2 出力", rR: wDec, dr: d.dNorm2 },
+
+                    { t: "23. デコーダーのFFN", u: "Decoder FFN", b: "bg-indigo-900 text-indigo-300", l: "dec-ffn",
+                      desc: ["デコーダー側でも、単語ごとにFFN層を通して最終的な意味の調整を行います。"], f: "FFN(X)",
+                      ma: "Norm 2 出力", rA: wDec, da: d.dNorm2, op: "FFN処理", mb: null, rB: [], db: null, mr: "FFN出力", rR: wDec, dr: d.dFFNOut },
+                    { t: "24. 最後の残差と正規化", u: "Add & Norm 3", b: "bg-slate-700 text-slate-300", l: "dec-addnorm3",
+                      desc: ["デコーダー最後の仕上げ。これで、次に出るべき単語の「脳内イメージ」が完成です。"], f: "Norm(X+FFN)",
+                      ma: "FFN出力", rA: wDec, da: d.dFFNOut, op: "残差＆正規化", mb: null, rB: [], db: null, mr: "Decoder最終出力", rR: wDec, dr: d.dNorm3 },
+
+                    { t: "25. 辞書サイズへの引き伸ばし", u: "Linear Projection", b: "bg-orange-900 text-orange-300", l: "linear",
+                      desc: ["4次元のベクトルを、AIが知っている全単語（語彙）の数だけの「得点板」へと引き伸ばします。"], f: "X * W_vocab",
+                      ma: "Decoder最終", rA: wDec, da: d.dNorm3, op: "× 辞書重み", mb: null, rB: [], db: null, mr: "全単語の生得点", rR: wDec, dr: d.logits },
+                    { t: "26. 出力確率の決定", u: "Softmax Output", b: "bg-orange-900 text-orange-300", l: "softmax",
+                      desc: ["生の得点を確率(%)に変換。1行目は『私』(89%)、2行目は『学生』(85%)と予測が出ました。"], f: "Softmax(logits)",
+                      ma: "生得点", rA: wDec, da: d.logits, op: "Softmax", mb: null, rB: [], db: null, mr: "最終予測確率", rR: wDec, dr: d.probs },
+                    { t: "27. 誤差を計算し、AIが賢くなる", u: "Loss & Backprop", b: "bg-red-900 text-red-300", l: "softmax",
+                      desc: ["正解とのズレ（誤差）を計算し、これを逆に辿って全パラメーターを微調整します（誤差逆伝播）。一括学習の真骨頂です。"], f: "Loss = -log(P)",
+                      ma: "予測確率", rA: wDec, da: d.probs, op: "誤差計算", mb: "正解[1, 0, 0, 0]", rB: wDec, db: [[0,1,0,0],[0,0,1,0]], mr: "学習完了", rR: wDec, dr: [[]] }
                 ];
 
                 const inferenceSteps = [
-                    {
-                        title: "1. [推論] エンコーダー：意味ベクトル変換",
-                        unit: "Encoder Embedding", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-embed",
-                        desc: ["推論時も最初は同じ。英語の入力「I am」を意味の座標データへマッピングします。"],
-                        formula: "Embedding(単語)",
-                        mALabel: "入力単語リスト", mARows: encWords, mAData: [[]], op: "変換", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：単語意味行列", mRRows: encWords, mRData: dataRegistry.encEmbed
-                    },
-                    {
-                        title: "2. [推論] エンコーダー：位置の足し算",
-                        unit: "Encoder Input Preparation", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-pe",
-                        desc: ["言葉の順序を叩き込むため、位置の目印を足し合わせます。"],
-                        formula: "X = 意味 + 位置",
-                        mALabel: "単語意味行列", mARows: encWords, mAData: dataRegistry.encEmbed, op: "＋", mBLabel: "位置目印行列", mBRows: encWords, mBData: dataRegistry.posEnc,
-                        mRLabel: "出力：位置付き意味行列", mRRows: encWords, mRData: dataRegistry.encSum
-                    },
-                    {
-                        title: "3. [推論] エンコーダー：Q, K, V生成",
-                        unit: "Encoder Linear Projection", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-attn",
-                        desc: ["対話の下準備。重み行列を掛け算してQ, K, Vの3役に分裂させます。"],
-                        formula: "V = X × W_V",
-                        mALabel: "位置付き意味行列", mARows: encWords, mAData: dataRegistry.encSum, op: "× 重み", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：バリュー行列 V", mRRows: encWords, mRData: dataRegistry.encV
-                    },
-                    {
-                        title: "4. [推論] エンコーダー：自己注意演算",
-                        unit: "Encoder Scaled Dot-Product", badge: "bg-blue-950 text-blue-400 border border-blue-900", loc: "enc-attn",
-                        desc: ["単語同士の関係性の強さを割り出します。"],
-                        formula: "Softmax(Q K^T / √d_k)",
-                        mALabel: "クエリ行列 Q", mARows: encWords, mAData: dataRegistry.encQ, op: "一括自己注意", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：注目度行列", mRRows: encWords, mRData: dataRegistry.encSoftmax
-                    },
-                    {
-                        title: "5. [推論] エンコーダー：意味解釈の固定保存",
-                        unit: "Encoder Output", badge: "bg-sky-950 text-sky-400 border border-sky-900", loc: "enc-attn",
-                        desc: ["注目度と中身(V)を合成して英語文の理解を終えます。このデータは翻訳完了まで大切に使い回されます。"],
-                        formula: "出力 = 注目度 × V",
-                        mALabel: "注目度行列", mARows: encWords, mAData: dataRegistry.encSoftmax, op: "×", mBLabel: "バリュー行列 V", mBRows: encWords, mBData: dataRegistry.encV,
-                        mRLabel: "出力：文脈理解完了行列", mRRows: encWords, mRData: dataRegistry.encOutput
-                    },
-                    {
-                        title: "6. [推論] デコーダー：開始合図の1語のみで挑戦",
-                        unit: "Decoder Initial Input", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-embed",
-                        desc: ["実際の翻訳では先の答えがありません。そのため、最初は『<BOS>（開始）』のたった1語（1行）だけで戦いに挑みます。データが1行だけなのが特徴です。"],
-                        formula: "デコーダー入力行数 = 1",
-                        mALabel: "初期トークン", mARows: ["<BOS>"], mAData: [[]], op: "埋め込み＋位置", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：デコーダー入力(1行)", mRRows: ["<BOS>"], mRData: dataRegistry.decSumInf
-                    },
-                    {
-                        title: "7. [推論] デコーダー：最初の質問状作成",
-                        unit: "Decoder Linear Projection", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-attn",
-                        desc: ["『<BOS>』から、英語側に問いかけるための質問状(Q)を1行分だけ作成します。"],
-                        formula: "Q_dec_inf = 入力(1行) × 重み",
-                        mALabel: "デコーダー入力(1行)", mARows: ["<BOS>"], mAData: dataRegistry.decSumInf, op: "× 重み", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：デコーダークエリ Q (1行)", mRRows: ["<BOS>"], mRData: dataRegistry.decQInf
-                    },
-                    {
-                        title: "8. [推論] デコーダー：自己注意（単独確認なのでマスク不要）",
-                        unit: "Decoder Self Attention", badge: "bg-purple-950 text-purple-400 border border-purple-900", loc: "dec-attn",
-                        desc: ["単語が1つしかないため、自分自身を見つめることしかできません。注目度は必然的に100%(1.00)になり、未来を隠すマスクの出番はありません。"],
-                        formula: "Softmax結果 -> [[1.00]]",
-                        mALabel: "デコーダークエリ Q (1行)", mARows: ["<BOS>"], mAData: dataRegistry.decQInf, op: "自己注意", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：自己注意結果(1行)", mRRows: ["<BOS>"], mRData: dataRegistry.decSelfAttnOutInf
-                    },
-                    {
-                        title: "9. [推論] クロス注意：英語全体へ質問突撃",
-                        unit: "Decoder-Encoder Cross Attention", badge: "bg-emerald-950 text-emerald-400 border border-emerald-900", loc: "cross-attn",
-                        desc: ["『<BOS>』の質問状（1行）を、保管していた英語側の看板（2行分）にぶつけます。『1行×2列』のクロススコアが生まれます。"],
-                        formula: "Score = Q_dec × K_enc^T",
-                        mALabel: "デコーダークエリ Q (1行)", mARows: ["<BOS>"], mAData: dataRegistry.decQInf, op: "× K_enc^T", mBLabel: "エンコーダーキー K^T", mBRows: encWords, mBData: [[1.5, 0.0], [0.3, 1.5], [-0.3, 0.7]],
-                        mRLabel: "出力：クロススコア(1行2列)", mRRows: ["<BOS>"], mRData: dataRegistry.crossScaledInf
-                    },
-                    {
-                        title: "10. [推論] クロス注意：翻訳ヒントの回収",
-                        unit: "Decoder-Encoder Cross Attention Out", badge: "bg-emerald-950 text-emerald-400 border border-emerald-900", loc: "cross-attn",
-                        desc: ["スコアを確率に直すと、英語の『I』を強く見るべきだと分かります。その比率で英語の中身(V)を掛け算し、濃い翻訳ヒントを1行分もらいます。"],
-                        formula: "ヒント = 注目度 × V_enc",
-                        mALabel: "クロススコア", mARows: ["<BOS>"], mAData: dataRegistry.crossScaledInf, op: "Softmax×V_enc", mBLabel: "エンコーダーバリュー V", mBRows: encWords, mBData: dataRegistry.encV,
-                        mRLabel: "出力：翻訳ヒント(1行)", mRRows: ["<BOS>"], mRData: dataRegistry.crossOutInf
-                    },
-                    {
-                        title: "11. [推論] 最終出力：第1語目「私」の確定発表",
-                        unit: "Final Output Layer", badge: "bg-slate-800 text-slate-300 border border-slate-700", loc: "softmax",
-                        desc: ["ヒントベクトルを単語空間の4次元へ投影し、確率計算をします。もっとも高い確率（85%）を叩き出した『私』が出力ワードに決定します！"],
-                        formula: "確率 = Softmax(ヒント × 全語彙重み)",
-                        mALabel: "翻訳ヒント(1行)", mARows: ["<BOS>"], mAData: dataRegistry.crossOutInf, op: "投影＆Softmax", mBLabel: null, mBRows: [], mBData: null,
-                        mRLabel: "出力：単語確率(1行4列)", mRRows: ["1語目の予測"], mRData: dataRegistry.finalProbInf
-                    },
-                    {
-                        title: "12. [推論] 自己回帰ループ：生まれた「私」を次のエサにする",
-                        unit: "Autoregressive Loop", badge: "bg-blue-950 text-blue-400 border border-blue-900", loc: "dec-embed",
-                        desc: ["自分で生み出した『私』を、次のターンの入力の末尾に結合します。次からは『<BOS> 私』の2行にデータが増え、あの未来マスクが必要な大人のフェーズへ進みます。"],
-                        formula: "次ターン入力 = ['<BOS>', '私']",
-                        mALabel: "これまでの入力", mARows: ["<BOS>"], mAData: [[]], op: "末尾にガッチャンコ", mBLabel: "生まれたて単語", mBRows: ["私"], mBData: [[]],
-                        mRLabel: "次ターンの入力(2行へ拡張)", mRRows: ["<BOS>", "私"], mRData: [[]]
-                    }
+                    { t: "1. [推論] Encoder一気通貫", u: "Encoder Full Pass", b: "bg-sky-900 text-sky-300", l: "enc-attn",
+                      desc: ["推論時も英語の入力はすべて同じ。EmbeddingからLayerNormまで一気に計算します。"], f: "Encoder(I am)",
+                      ma: "英語入力", rA: wEnc, da: [[]], op: "エンコーダー処理", mb: null, rB: [], db: null, mr: "Encoder出力", rR: wEnc, dr: d.eNorm2 },
+                    { t: "2. [推論] KとVの固定保存", u: "Freeze K, V", b: "bg-slate-700 text-slate-300", l: "enc-addnorm2",
+                      desc: ["完成した英語の文脈ベクトルから、KとVを作り、メモリに固定保存（Freeze）します。推論中ずっと使い回します。"], f: "K_e, V_e = fix",
+                      ma: "Encoder出力", rA: wEnc, da: d.eNorm2, op: "保存", mb: null, rB: [], db: null, mr: "固定K,V", rR: wEnc, dr: d.eNorm2 },
+
+                    { t: "3. [推論] 1語目ループ開始", u: "Decoder Input(1 word)", b: "bg-purple-900 text-purple-300", l: "dec-embed",
+                      desc: ["答えがないので、まずは開始合図「<BOS>」の1行（1単語）だけでデコーダーに突撃します。"], f: "X = Emb(<BOS>)",
+                      ma: "入力(1行)", rA: ["<BOS>"], da: d.dIn1, op: "開始", mb: null, rB: [], db: null, mr: "デコーダー入力", rR: ["<BOS>"], dr: d.dIn1 },
+                    { t: "4. [推論] Q,K,V (1行分)", u: "Q,K,V Projection", b: "bg-purple-900 text-purple-300", l: "dec-attn",
+                      desc: ["1単語しかないので、Q, K, Vも1行分だけ生成されます。"], f: "Q = X * Wq",
+                      ma: "入力(1行)", rA: ["<BOS>"], da: d.dIn1, op: "投影", mb: null, rB: [], db: null, mr: "クエリQ", rR: ["<BOS>"], dr: d.dQ1 },
+                    { t: "5. [推論] 孤独な自己注意", u: "Self Attention", b: "bg-purple-900 text-purple-300", l: "dec-attn",
+                      desc: ["相手がいないので自分自身を見ます。注目度は100%。未来がないのでマスク処理は空振りします。"], f: "Softmax(Q*K)",
+                      ma: "スコア", rA: ["<BOS>"], da: d.dScore1, op: "Softmax", mb: null, rB: [], db: null, mr: "注目度", rR: ["<BOS>"], dr: d.dSoft1 },
+                    { t: "6. [推論] 最初の残差", u: "Add & Norm 1", b: "bg-slate-700 text-slate-300", l: "dec-addnorm1",
+                      desc: ["1行のデータに対して残差接続と正規化。"], f: "Norm(X+Attn)",
+                      ma: "Attn出力", rA: ["<BOS>"], da: d.dSoft1, op: "残差＆正規化", mb: null, rB: [], db: null, mr: "Norm 1 出力", rR: ["<BOS>"], dr: d.dNorm1_1 },
+
+                    { t: "7. [推論] 固定K,Vの呼び出し", u: "Fetch Frozen K,V", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["Step2で保存した英語2単語分のKとV（2行）を呼び出します。"], f: "Load K_e, V_e",
+                      ma: "Q_dec(1行)", rA: ["<BOS>"], da: d.dNorm1_1, op: "呼び出し", mb: "K_enc(2行)", rB: wEnc, db: d.eNorm2, mr: "準備OK", rR: ["<BOS>"], dr: [[]] },
+                    { t: "8. [推論] 1対2のクロススコア", u: "Cross Score", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["1行のQを2行のKにぶつけます。1行×2列の相性スコアが出ます。"], f: "Q_d * K_e^T",
+                      ma: "Q_dec(1行)", rA: ["<BOS>"], da: d.dNorm1_1, op: "× K_enc^T", mb: null, rB: [], db: null, mr: "クロススコア", rR: ["<BOS>"], dr: d.cScore1 },
+                    { t: "9. [推論] 英語ヒント吸収", u: "Cross Attn Out", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["スコアに従ってVを吸収し、翻訳ヒントベクトル(1行分)を生成。"], f: "Softmax * V",
+                      ma: "クロス割合(%)", rA: ["<BOS>"], da: d.cSoft1, op: "× V_enc", mb: null, rB: [], db: null, mr: "Cross Attn出力", rR: ["<BOS>"], dr: d.cAttnOut1 },
+
+                    { t: "10. [推論] クロス残差とFFN", u: "Add&Norm -> FFN", b: "bg-slate-700 text-slate-300", l: "dec-addnorm3",
+                      desc: ["残差、FFN、さらに残差…とデコーダーの後半を一気に駆け抜けます。"], f: "Norm(FFN)",
+                      ma: "Cross出力", rA: ["<BOS>"], da: d.cAttnOut1, op: "FFN処理一式", mb: null, rB: [], db: null, mr: "Decoder出力", rR: ["<BOS>"], dr: d.dNorm3_1 },
+
+                    { t: "11. [推論] 生得点の算出", u: "Linear", b: "bg-orange-900 text-orange-300", l: "linear",
+                      desc: ["辞書サイズへ引き伸ばし、1行分の生の得点を算出します。"], f: "X * W_vocab",
+                      ma: "Decoder出力", rA: ["<BOS>"], da: d.dNorm3_1, op: "× 辞書重み", mb: null, rB: [], db: null, mr: "全単語生得点", rR: ["<BOS>"], dr: d.logits1 },
+                    { t: "12. [推論] 1語目「私」の誕生", u: "Softmax Out", b: "bg-orange-900 text-orange-300", l: "softmax",
+                      desc: ["確率に直し、もっとも確率の高い「私」が最初の出力ワードとして確定しました！"], f: "ArgMax(P)",
+                      ma: "生得点", rA: ["<BOS>"], da: d.logits1, op: "Softmax", mb: null, rB: [], db: null, mr: "予測確率", rR: ["<BOS>"], dr: d.probs1 },
+
+                    { t: "13. [ループ] 生んだ言葉をエサにする", u: "Autoregressive Append", b: "bg-red-900 text-red-300", l: "dec-embed",
+                      desc: ["★ここが自己回帰！ 出力された『私』を、次回の入力の末尾にガッチャンコします。"], f: "Input = [<BOS>, 私]",
+                      ma: "前回の入力", rA: ["<BOS>"], da: [[]], op: "＋ 末尾追加", mb: "生まれた言葉", rB: ["私"], db: [[]], mr: "次回入力(2行へ)", rR: wDec, dr: [[]] },
+                    { t: "14. [推論-2週目] 2行での再スタート", u: "Embed (2 words)", b: "bg-purple-900 text-purple-300", l: "dec-embed",
+                      desc: ["データが2行（2単語）になりました。再びEmbeddingからスタートします。"], f: "Emb([<BOS>, 私])",
+                      ma: "新入力(2行)", rA: wDec, da: d.dIn, op: "変換", mb: null, rB: [], db: null, mr: "デコーダー入力", rR: wDec, dr: d.dIn },
+                    { t: "15. [推論-2週目] Q,K,V (2行分)", u: "Q,K,V Projection", b: "bg-purple-900 text-purple-300", l: "dec-attn",
+                      desc: ["データが2行になったので、Q,K,Vも2行分生成されます。"], f: "Q = X * Wq",
+                      ma: "入力(2行)", rA: wDec, da: d.dIn, op: "投影", mb: null, rB: [], db: null, mr: "クエリQ", rR: wDec, dr: d.dQ },
+                    { t: "16. [推論-2週目] 未来マスクの発動！", u: "Masked Attention", b: "bg-rose-900 text-rose-300", l: "dec-attn",
+                      desc: ["★データが2行になったため、1語目が未来の2語目を覗き見できてしまいます。ここで初めて『未来マスク(-∞)』が牙を剥きます。"], f: "Mask = -∞",
+                      ma: "スコア(2x2)", rA: wDec, da: d.dScore, op: "未来遮断", mb: null, rB: [], db: null, mr: "マスク後", rR: wDec, dr: d.dMasked },
+                    { t: "17. [推論-2週目] 再び固定K,Vとクロス", u: "Cross Attn", b: "bg-emerald-900 text-emerald-300", l: "cross-attn",
+                      desc: ["保存しておいた英語K,Vを再度使い、今度は2行分のQでクロス注意を行います。"], f: "Q_d * K_e",
+                      ma: "Q(2行)", rA: wDec, da: d.dNorm1, op: "× K_enc^T", mb: null, rB: [], db: null, mr: "クロススコア", rR: wDec, dr: d.cScore },
+                    { t: "18. [推論-2週目] 2語目の出力", u: "Softmax Out", b: "bg-orange-900 text-orange-300", l: "softmax",
+                      desc: ["同様に線形層を通り、2行目の結果から2語目の単語（今回は『学生』）が確定します。"], f: "ArgMax(P)",
+                      ma: "生得点", rA: wDec, da: d.logits, op: "Softmax", mb: null, rB: [], db: null, mr: "予測確率", rR: wDec, dr: d.probs },
+                    { t: "19. [推論] そしてループは続く", u: "End of Turn", b: "bg-red-900 text-red-300", l: "dec-embed",
+                      desc: ["これを「<EOS>（終了）」トークンが出るまで繰り返します。これが生成AIが文字を打ち出す仕組みです。"], f: "Loop Until <EOS>",
+                      ma: "今回の出力", rA: ["学生"], da: [[]], op: "追加して次へ", mb: null, rB: [], db: null, mr: "次回入力(3行へ)", rR: ["<BOS>","私","学生"], dr: [[]] },
                 ];
 
                 const currentStepData = computed(() => {
@@ -541,33 +452,27 @@
                     return steps[step.value - 1];
                 });
 
-                const currentStepTitle = computed(() => currentStepData.value.title);
-                const currentUnit = computed(() => currentStepData.value.unit);
-                const unitBadgeClass = computed(() => currentStepData.value.badge);
-                const currentStepDesc = computed(() => currentStepData.value.desc);
-                const currentFormula = computed(() => currentStepData.value.formula);
-                const mapLocation = computed(() => currentStepData.value.loc);
-
-                const matrixALabel = computed(() => currentStepData.value.mALabel);
-                const matrixARowLabels = computed(() => currentStepData.value.mARows);
-                const matrixAData = computed(() => currentStepData.value.mAData);
-                const operationSymbol = computed(() => currentStepData.value.op);
-                const matrixBLabel = computed(() => currentStepData.value.mBLabel);
-                const matrixBRowLabels = computed(() => currentStepData.value.mBRows);
-                const matrixBData = computed(() => currentStepData.value.mBData);
-                const matrixResultLabel = computed(() => currentStepData.value.mRLabel);
-                const matrixResultRowLabels = computed(() => currentStepData.value.mRRows);
-                const matrixResultData = computed(() => currentStepData.value.mRData);
-
                 return {
                     mode, step, maxSteps, setMode, nextStep, prevStep, formatNum, cellColor,
-                    currentStepTitle, currentUnit, unitBadgeClass, currentStepDesc, currentFormula, mapLocation,
-                    matrixALabel, matrixARowLabels, matrixAData, operationSymbol, matrixBLabel, matrixBRowLabels, matrixBData,
-                    matrixResultLabel, matrixResultRowLabels, matrixResultData
+                    currentStepTitle: computed(() => currentStepData.value.t),
+                    currentUnit: computed(() => currentStepData.value.u),
+                    unitBadgeClass: computed(() => currentStepData.value.b),
+                    currentStepDesc: computed(() => currentStepData.value.desc),
+                    currentFormula: computed(() => currentStepData.value.f),
+                    mapLocation: computed(() => currentStepData.value.l),
+                    matrixALabel: computed(() => currentStepData.value.ma),
+                    matrixARowLabels: computed(() => currentStepData.value.rA),
+                    matrixAData: computed(() => currentStepData.value.da),
+                    operationSymbol: computed(() => currentStepData.value.op),
+                    matrixBLabel: computed(() => currentStepData.value.mb),
+                    matrixBRowLabels: computed(() => currentStepData.value.rB),
+                    matrixBData: computed(() => currentStepData.value.db),
+                    matrixResultLabel: computed(() => currentStepData.value.mr),
+                    matrixResultRowLabels: computed(() => currentStepData.value.rR),
+                    matrixResultData: computed(() => currentStepData.value.dr)
                 };
             }
         }).mount('#app');
     </script>
-
 </body>
 </html>
