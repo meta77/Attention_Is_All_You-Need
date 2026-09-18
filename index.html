@@ -59,10 +59,10 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
 
             <!-- 左側 解説 -->
-            <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col h-fit">
+            <div class="md:col-span-3 lg:col-span-3 bg-white border border-slate-200 rounded-xl p-3 md:p-4 shadow-sm flex flex-col h-fit">
                 <span class="text-[10px] font-bold text-slate-400 uppercase mb-1">現在の処理ユニット</span>
                 <span class="text-xs font-semibold px-2 py-1 rounded mb-3 inline-block font-mono w-fit" :class="unitBadgeClass">
                     {{ currentUnit }}
@@ -78,10 +78,10 @@
             </div>
 
             <!-- 中央 マップ -->
-            <div class="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex flex-col items-center">
+            <div class="md:col-span-4 lg:col-span-3 bg-white border border-slate-200 rounded-xl p-2 md:p-3 shadow-sm flex flex-col items-center overflow-x-hidden">
                 <h3 class="text-[10px] font-bold text-slate-400 uppercase mb-2">アーキテクチャ・マップ</h3>
 
-                <div class="w-full flex flex-col items-center transform scale-[0.85] sm:scale-95 origin-top font-sans">
+                <div class="w-full flex flex-col items-center transform scale-[0.85] md:scale-[0.65] lg:scale-95 origin-top font-sans">
                     <!-- 出力層 -->
                     <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[10px] font-bold py-1 w-32 text-center mb-1" :class="{active: mapLocation === 'softmax'}">Softmax</div>
                     <div class="arch-block border border-slate-300 bg-slate-100 rounded text-[10px] font-bold py-1 w-32 text-center mb-2" :class="{active: mapLocation === 'linear'}">Linear</div>
@@ -134,7 +134,7 @@
             </div>
 
             <!-- 右側 行列データ -->
-            <div class="lg:col-span-6 bg-slate-900 text-slate-100 border border-slate-800 rounded-xl p-4 shadow-sm overflow-hidden flex flex-col h-full">
+            <div class="md:col-span-5 lg:col-span-6 bg-slate-900 text-slate-100 border border-slate-800 rounded-xl p-3 md:p-4 shadow-sm overflow-hidden flex flex-col h-full">
                 <div class="text-[10px] font-semibold text-slate-400 mb-3 border-b border-slate-800 pb-1">
                     データテンソル（4次元化表現）
                 </div>
